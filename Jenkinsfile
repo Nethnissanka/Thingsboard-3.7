@@ -2,12 +2,11 @@ pipeline {
     agent any
 
     parameters {
-        
         string(name: 'TB_VERSION', defaultValue: '4.0', description: 'ThingsBoard version to upgrade to (e.g., 4.1)')
-        PACKAGE_REPO  = "https://github.com/thingsboard/thingsboard/releases/download"
     }
 
     environment {
+        PACKAGE_REPO  = "https://github.com/thingsboard/thingsboard/releases/download"
         IMAGE_NAME = "thingsboard:${params.TB_VERSION}"
         CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
     }
