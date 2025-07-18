@@ -78,6 +78,7 @@ pipeline {
                 echo "🚀 Launching version ${params.TB_VERSION} using docker-compose"
                 sh """
                     TB_VERSION=${params.TB_VERSION} docker compose down || true
+                    docker compose down 
                     TB_VERSION=${params.TB_VERSION} docker compose up -d
                 """
             }
