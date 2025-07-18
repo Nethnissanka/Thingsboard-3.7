@@ -7,8 +7,8 @@ pipeline {
 
     environment {
         PACKAGE_REPO  = "https://github.com/thingsboard/thingsboard/releases/download"
-        IMAGE_NAME = "thingsboard:${params.TB_VERSION}"
-        CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
+        // IMAGE_NAME = "thingsboard:${params.TB_VERSION}"
+        // CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
     }
 
     stages {
@@ -16,6 +16,15 @@ pipeline {
             steps {
                 echo '📥 Checking out repository...'
                 checkout scm
+            }
+        }
+
+        stage('Init Variables') {
+            steps {
+                script {
+                    env.IMAGE_NAME = "thingsboard:${params.TB_VERSION}"
+                    env.CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
+                }
             }
         }
 
@@ -164,7 +173,7 @@ pipeline {
                 echo "Current version: ${env.TB_VERSION}"
                 // Check if an upgrade was performed
                 if (env.UPGRADE_REQUIRED == "true") {
-                    echo "🎉 ThingsBoard upgraded from v${env.CURRENT_VERSION} to v${env.Tb_VERSION} successfully!"
+                    echo "🎉 ThingsBoard upgraded from v${env.CURRENT_VERSION} to v${env.TB_VERSION} successfully!"
 
                 } else {
                     echo "✅ No upgrade needed. Still running v${env.CURRENT_VERSION}."
