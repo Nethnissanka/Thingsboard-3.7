@@ -47,7 +47,7 @@ pipeline {
                     // Download the RPM package
                     sh """
                         curl -L -o thingsboard-${env.TB_VERSION}.rpm ${rpmUrl}
-                        ls -lh thingsboard.rpm
+                        ls -lh thingsboard-*.rpm
                     """
                 }
             }
