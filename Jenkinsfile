@@ -133,25 +133,51 @@ pipeline {
                 expression { env.UPGRADE_REQUIRED == "true" }
             }
             steps {
-                echo "🔍 Verifying ThingsBoard is running"
-                // Wait for ThingsBoard to start up
-                sleep 60
-                sleep 60
-                echo '🔎 Verifying deployment...'
-                sh "docker ps | grep ${CONTAINER_NAME}"
-
-                echo "🔍 Verifying application is up"
-                    // Check if ThingsBoard is responding on HTTP
-                def code = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/login", returnStdout: true).trim()
-                if (code != "200") {
-                    echo "❌ ThingsBoard is not responding correctly (HTTP ${code})"
-                    // If not 200, fail the build
-                    error "❌ Upgrade failed — HTTP status: ${code}"
-                } else {
-                    // If 200, everything is fine
-                    echo "✅ ThingsBoard is up and responding (HTTP 200)"
+                script {
+                    echo "🔍 Verifying ThingsBoard is running"
+                    // Wait for ThingsBoard to start up
+                    sleep 60
+                    sleep 60
+                    echo '🔎 Verifying deployment...'
+                    sh "docker ps | grep ${CONTAINER_NAME}"
+    
+                    echo "🔍 Verifying application is up"
+                        // Check if ThingsBoard is responding on HTTP
+                    def code = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/login", returnStdout: true).trim()
+                    if (code != "200") {
+                        echo "❌ ThingsBoard is not responding correctly (HTTP ${code})"
+                        // If not 200, fail the build
+                        error "❌ Upgrade failed — HTTP status: ${code}"
+                    } else {
+                        // If 200, everything is fine
+                        echo "✅ ThingsBoard is up and responding (HTTP 200)"
+                    }
                 }
             }
         }
+    }
+    post {
+        success {
+            script {
+                echo "✅ Upgrade pipeline completed successfully!"
+                // Print final version information
+                echo "Current version: ${env.TB_VERSION}"
+                // Check if an upgrade was performed
+                if (env.UPGRADE_REQUIRED == "true") {
+                    echo "🎉 ThingsBoard upgraded from v${env.CURRENT_VERSION} to v${env.Tb_VERSION} successfully!"
+
+                } else {
+                    echo "✅ No upgrade needed. Still running v${env.CURRENT_VERSION}."
+
+                }
+            }
+        }
+        failure {
+            echo "❌ ThingsBoard upgrade failed!"
+        }
+        unstable {
+            echo "⚠️ ThingsBoard upgrade is unstable!"
+        }
+
     }
 }
