@@ -28,19 +28,46 @@ pipeline {
             }
         }
 
+        // stage('Detect Current Installed Version') {
+        //     steps {
+        //         script {
+        //             echo '🔍 Detecting current running ThingsBoard container...'
+        //             def running = sh(script: "docker ps --format '{{.Names}}' | grep ${CONTAINER_NAME} || true", returnStdout: true).trim()
+
+        //             if (running) {
+        //                 def currentImage = sh(script: "docker inspect ${CONTAINER_NAME} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
+        //                 def currentTag = currentImage.split(":")[1]
+        //                 echo "📦 Current running version: ${currentTag}"
+        //                 env.CURRENT_VERSION = currentTag
+        //             } else {
+        //                 echo "⚠️ No running ThingsBoard container named ${CONTAINER_NAME}"
+        //                 env.CURRENT_VERSION = "none"
+        //             }
+        //         }
+        //     }
+        // }
+
         stage('Detect Current Installed Version') {
             steps {
                 script {
                     echo '🔍 Detecting current running ThingsBoard container...'
-                    def running = sh(script: "docker ps --format '{{.Names}}' | grep ${CONTAINER_NAME} || true", returnStdout: true).trim()
-
-                    if (running) {
-                        def currentImage = sh(script: "docker inspect ${CONTAINER_NAME} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
+                    
+                    def containerList = sh(script: "docker ps --format '{{.Names}}' | grep '^thingsboard-' || true", returnStdout: true).trim()
+                    
+                    if (containerList) {
+                        def currentContainer = containerList.split("\\n")[0].trim()
+                        def currentImage = sh(script: "docker inspect ${currentContainer} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
                         def currentTag = currentImage.split(":")[1]
-                        echo "📦 Current running version: ${currentTag}"
+
+                        echo "📦 Current running container: ${currentContainer}"
+                        echo "📦 Current running image: ${currentImage}"
+                        echo "📦 Current version: ${currentTag}"
+
+                        env.CURRENT_CONTAINER_NAME = currentContainer
                         env.CURRENT_VERSION = currentTag
                     } else {
-                        echo "⚠️ No running ThingsBoard container named ${CONTAINER_NAME}"
+                        echo "⚠️ No running ThingsBoard container found"
+                        env.CURRENT_CONTAINER_NAME = ""
                         env.CURRENT_VERSION = "none"
                     }
                 }
