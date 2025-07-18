@@ -37,7 +37,45 @@ pipeline {
                 }
             }
         }
+
+
+        stage('Compare Versions') {
+            steps {
+                script {
+                    echo '🔍 Comparing current version with latest release...'
+                    if (!env.CURRENT_VERSION || !env.TB_VERSION) {
+                        error '❌ Cannot compare versions — one or both are unknown!'
+                    }
+                    echo "📦 Current version: ${env.CURRENT_VERSION}, Latest version: ${env.TB_VERSION}"
+                    // Compare versions
+                    if (env.CURRENT_VERSION == env.TB_VERSION) {
+                        // If versions match, skip upgrade
+                        echo "✅ ThingsBoard is already up to date (v${env.CURRENT_VERSION})"
+                        env.UPGRADE_REQUIRED = "false"
+                    } else {
+                        // If versions differ, set upgrade required
+                        echo "⬆️ Upgrade required: ${env.CURRENT_VERSION} ➜ ${env.TB_VERSION}"
+                        env.UPGRADE_REQUIRED = "true"
+                    }
+                }
+            }
+        }
+
+
+        stage('Skip Upgrade') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "false" }
+            }
+            steps {
+                echo "✅ Skipping upgrade — Already latest version."
+            }
+        }
+
+        
         stage('Download RPM') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" }
+            }
             steps {
                 script {
                     echo "📥 Downloading ThingsBoard RPM package..."
@@ -54,6 +92,9 @@ pipeline {
         }
 
         stage('Build New Docker Image') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" }
+            }
             steps {
                 echo "🔧 Building image ${IMAGE_NAME}"
                 sh "docker build -t ${IMAGE_NAME} --build-arg TB_VERSION=${params.TB_VERSION} ."
@@ -61,6 +102,9 @@ pipeline {
         }
 
         stage('Stop and Remove Old Container') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" }
+            }
            
             steps {
                 echo "🛑 Stopping container ${CONTAINER_NAME}"
@@ -72,6 +116,9 @@ pipeline {
         }
 
         stage('Start New Version with Docker Compose') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" }
+            }
             steps {
                 echo "🚀 Launching version ${params.TB_VERSION} using docker-compose"
                 sh """
@@ -82,9 +129,28 @@ pipeline {
         }
 
         stage('Verify Deployment') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" }
+            }
             steps {
+                echo "🔍 Verifying ThingsBoard is running"
+                // Wait for ThingsBoard to start up
+                sleep 60
+                sleep 60
                 echo '🔎 Verifying deployment...'
                 sh "docker ps | grep ${CONTAINER_NAME}"
+
+                echo "🔍 Verifying application is up"
+                    // Check if ThingsBoard is responding on HTTP
+                def code = sh(script: "curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/login", returnStdout: true).trim()
+                if (code != "200") {
+                    echo "❌ ThingsBoard is not responding correctly (HTTP ${code})"
+                    // If not 200, fail the build
+                    error "❌ Upgrade failed — HTTP status: ${code}"
+                } else {
+                    // If 200, everything is fine
+                    echo "✅ ThingsBoard is up and responding (HTTP 200)"
+                }
             }
         }
     }
