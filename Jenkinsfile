@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     parameters {
+        PACKAGE_REPO  = "https://github.com/thingsboard/thingsboard/releases/download"
         string(name: 'TB_VERSION', defaultValue: '4.0', description: 'ThingsBoard version to upgrade to (e.g., 4.1)')
     }
 
@@ -33,6 +34,21 @@ pipeline {
                         echo "⚠️ No running ThingsBoard container named ${CONTAINER_NAME}"
                         env.CURRENT_VERSION = "none"
                     }
+                }
+            }
+        }
+        stage('Download RPM') {
+            steps {
+                script {
+                    echo "📥 Downloading ThingsBoard RPM package..."
+                    // Construct the RPM URL based on the latest version
+                    def rpmUrl = "${PACKAGE_REPO}/v${env.TB_VERSION}/thingsboard-${env.TB_VERSION}.rpm"
+                    echo "📥 Downloading RPM from: ${rpmUrl}"
+                    // Download the RPM package
+                    sh """
+                        curl -L -o thingsboard-${env.TB_VERSION}.rpm ${rpmUrl}
+                        ls -lh thingsboard.rpm
+                    """
                 }
             }
         }
