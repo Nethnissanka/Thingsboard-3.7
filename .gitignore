@@ -37,3 +37,4 @@ rebuild-docker.sh
 */.run/**
 .run/**
 .run
+thingsboard-4.0.rpm
