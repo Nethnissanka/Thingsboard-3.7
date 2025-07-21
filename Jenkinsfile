@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'TB_VERSION', defaultValue: '4.0', description: 'ThingsBoard version to upgrade to (e.g., 4.1)')
+        string(name: 'TB_VERSION', defaultValue: '4.0', description: 'Enter the ThingsBoard version to upgrade (e.g., 4.1)')
     }
 
     environment {
@@ -23,11 +23,41 @@ pipeline {
             steps {
                 script {
                     env.IMAGE_NAME = "thingsboard:${params.TB_VERSION}"
-                    env.CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
+                    env.NEW_CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
                 }
             }
         }
 
+        stage('Detect Current Installed Version') {
+            steps {
+                script {
+                    echo '🔍 Detecting current running ThingsBoard container...'
+                    
+                    def containerList = sh(script: "docker ps --format '{{.Names}}' | grep '^thingsboard-' || true", returnStdout: true).trim()
+                    
+                    if (containerList) {
+                        def currentContainer = containerList.split("\\n")[0].trim()
+                        def currentImage = sh(script: "docker inspect ${currentContainer} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
+                        def currentTag = currentImage.split(":")[1]
+
+                        echo "📦 Current running container: ${currentContainer}"
+                        echo "📦 Current running image: ${currentImage}"
+                        echo "📦 Current version: ${currentTag}"
+
+                        env.CURRENT_CONTAINER_NAME = currentContainer
+                        env.CURRENT_IMAGE_NAME = currentImage
+                        env.CURRENT_VERSION = currentTag
+                        env.ROLLBACK_IMAGE = "thingsboard:rollback-${currentTag}"
+                    } else {
+                        echo "⚠️ No running ThingsBoard container found"
+                        env.CURRENT_CONTAINER_NAME = ""
+                        env.CURRENT_VERSION = "none"
+                        env.CURRENT_IMAGE_NAME = ""
+                        env.ROLLBACK_IMAGE = ""
+                    }
+                }
+            }
+        }
         // stage('Detect Current Installed Version') {
         //     steps {
         //         script {
@@ -47,39 +77,12 @@ pipeline {
         //     }
         // }
 
-        stage('Detect Current Installed Version') {
-            steps {
-                script {
-                    echo '🔍 Detecting current running ThingsBoard container...'
-                    
-                    def containerList = sh(script: "docker ps --format '{{.Names}}' | grep '^thingsboard-' || true", returnStdout: true).trim()
-                    
-                    if (containerList) {
-                        def currentContainer = containerList.split("\\n")[0].trim()
-                        def currentImage = sh(script: "docker inspect ${currentContainer} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
-                        def currentTag = currentImage.split(":")[1]
-
-                        echo "📦 Current running container: ${currentContainer}"
-                        echo "📦 Current running image: ${currentImage}"
-                        echo "📦 Current version: ${currentTag}"
-
-                        env.CURRENT_CONTAINER_NAME = currentContainer
-                        env.CURRENT_VERSION = currentTag
-                    } else {
-                        echo "⚠️ No running ThingsBoard container found"
-                        env.CURRENT_CONTAINER_NAME = ""
-                        env.CURRENT_VERSION = "none"
-                    }
-                }
-            }
-        }
-
 
         stage('Compare Versions') {
             steps {
                 script {
                     echo '🔍 Comparing current version with latest release...'
-                    if (!env.CURRENT_VERSION || !env.TB_VERSION) {
+                    if (!env.CURRENT_VERSION || !params.TB_VERSION) {
                         error '❌ Cannot compare versions — one or both are unknown!'
                     }
                     echo "📦 Current version: ${env.CURRENT_VERSION}, Latest version: ${env.TB_VERSION}"
@@ -127,6 +130,17 @@ pipeline {
             }
         }
 
+         stage('Backup Current Image') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" && env.CURRENT_IMAGE_NAME != "" }
+            }
+            steps {
+                echo "📦 Tagging current image for rollback: ${env.ROLLBACK_IMAGE}"
+                sh "docker tag ${env.CURRENT_IMAGE_NAME} ${env.ROLLBACK_IMAGE}"
+            }
+        }
+
+
         stage('Build New Docker Image') {
             when {
                 expression { env.UPGRADE_REQUIRED == "true" }
@@ -139,24 +153,24 @@ pipeline {
 
         stage('Stop and Remove Old Container') {
             when {
-                expression { env.UPGRADE_REQUIRED == "true" }
+                expression { env.UPGRADE_REQUIRED == "true" && env.CURRENT_CONTAINER_NAME != "" }
             }
            
             steps {
-                echo "🛑 Stopping container ${CONTAINER_NAME}"
+                echo "🛑 Stopping container ${env.CURRENT_CONTAINER_NAME}"
                 sh """
-                    docker stop ${CONTAINER_NAME} || true
-                    docker rm ${CONTAINER_NAME} || true
+                    docker stop ${env.CURRENT_CONTAINER_NAME} || true
+                    docker rm ${env.CURRENT_CONTAINER_NAME} || true
                 """
             }
         }
 
         stage('Start New Version with Docker Compose') {
             when {
-                expression { env.UPGRADE_REQUIRED == "true" }
+                expression { env.UPGRADE_REQUIRED == "true"}
             }
             steps {
-                echo "🚀 Launching version ${params.TB_VERSION} using docker-compose"
+                echo "🚀 Launching version ${params.TB_VERSION} using docker compose"
                 sh """
                     TB_VERSION=${params.TB_VERSION} docker compose down || true
                     TB_VERSION=${params.TB_VERSION} docker compose up -d
@@ -192,6 +206,7 @@ pipeline {
             }
         }
     }
+
     post {
         success {
             script {
@@ -209,11 +224,29 @@ pipeline {
             }
         }
         failure {
-            echo "❌ ThingsBoard upgrade failed!"
+            script {
+                echo "❌ Upgrade failed. Starting rollback..."
+
+                if (env.ROLLBACK_IMAGE && env.CURRENT_CONTAINER_NAME != "") {
+                    echo "🔁 Restoring from image: ${env.ROLLBACK_IMAGE}"
+                    sh """
+                        docker stop ${env.NEW_CONTAINER_NAME} || true
+                        docker rm ${env.NEW_CONTAINER_NAME} || true
+                        docker run -d --name ${env.CURRENT_CONTAINER_NAME} -p 8080:8080 ${env.ROLLBACK_IMAGE}
+                    """
+                    echo "✅ Rollback complete. ThingsBoard is back to v${env.CURRENT_VERSION}"
+                } else {
+                    echo "⚠️ No backup image available to rollback."
+                }
+
+                error "❌ Upgrade failed and rollback was triggered."
+            }
         }
+        
         unstable {
             echo "⚠️ ThingsBoard upgrade is unstable!"
         }
 
     }
+    
 }
