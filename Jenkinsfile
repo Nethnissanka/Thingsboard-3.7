@@ -190,7 +190,7 @@ pipeline {
                     sleep 60
                     sleep 60
                     echo '🔎 Verifying deployment...'
-                    sh "docker ps | grep ${CONTAINER_NAME}"
+                    // sh "docker ps | grep ${CONTAINER_NAME}"
     
                     echo "🔍 Verifying application is up"
                         // Check if ThingsBoard is responding on HTTP
