@@ -24,41 +24,41 @@ pipeline {
                 script {
                     env.IMAGE_NAME = "thingsboard:${params.TB_VERSION}"
                     env.NEW_CONTAINER_NAME = "thingsboard-${params.TB_VERSION}"
-                    env.CURRENT_VERSION = "4.0.2"
+                    
                 }
             }
         }
 
-        // stage('Detect Current Installed Version') {
-        //     steps {
-        //         script {
-        //             echo '🔍 Detecting current running ThingsBoard container...'
+        stage('Detect Current Installed Version') {
+            steps {
+                script {
+                    echo '🔍 Detecting current running ThingsBoard container...'
                     
-        //             def containerList = sh(script: "docker ps --format '{{.Names}}' | grep '^thingsboard-' || true", returnStdout: true).trim()
+                    def containerList = sh(script: "docker ps --format '{{.Names}}' | grep '^thingsboard-' || true", returnStdout: true).trim()
                     
-        //             if (containerList) {
-        //                 def currentContainer = containerList.split("\\n")[0].trim()
-        //                 def currentImage = sh(script: "docker inspect ${currentContainer} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
-        //                 def currentTag = currentImage.split(":")[1]
+                    if (containerList) {
+                        def currentContainer = containerList.split("\\n")[0].trim()
+                        def currentImage = sh(script: "docker inspect ${currentContainer} --format '{{ index .Config.Image }}'", returnStdout: true).trim()
+                        def currentTag = currentImage.split(":")[1]
 
-        //                 echo "📦 Current running container: ${currentContainer}"
-        //                 echo "📦 Current running image: ${currentImage}"
-        //                 echo "📦 Current version: ${currentTag}"
+                        echo "📦 Current running container: ${currentContainer}"
+                        echo "📦 Current running image: ${currentImage}"
+                        echo "📦 Current version: ${currentTag}"
 
-        //                 env.CURRENT_CONTAINER_NAME = currentContainer
-        //                 env.CURRENT_IMAGE_NAME = currentImage
-        //                 env.CURRENT_VERSION = currentTag
-        //                 env.ROLLBACK_IMAGE = "thingsboard:rollback-${currentTag}"
-        //             } else {
-        //                 echo "⚠️ No running ThingsBoard container found"
-        //                 env.CURRENT_CONTAINER_NAME = ""
-        //                 env.CURRENT_VERSION = "none"
-        //                 env.CURRENT_IMAGE_NAME = ""
-        //                 env.ROLLBACK_IMAGE = ""
-        //             }
-        //         }
-        //     }
-        // }
+                        env.CURRENT_CONTAINER_NAME = currentContainer
+                        env.CURRENT_IMAGE_NAME = currentImage
+                        env.CURRENT_VERSION = currentTag
+                        env.ROLLBACK_IMAGE = "thingsboard:rollback-${currentTag}"
+                    } else {
+                        echo "⚠️ No running ThingsBoard container found"
+                        env.CURRENT_CONTAINER_NAME = ""
+                        env.CURRENT_VERSION = "none"
+                        env.CURRENT_IMAGE_NAME = ""
+                        env.ROLLBACK_IMAGE = ""
+                    }
+                }
+            }
+        }
         // stage('Detect Current Installed Version') {
         //     steps {
         //         script {
@@ -131,15 +131,15 @@ pipeline {
             }
         }
 
-        //  stage('Backup Current Image') {
-        //     when {
-        //         expression { env.UPGRADE_REQUIRED == "true" && env.CURRENT_IMAGE_NAME != "" }
-        //     }
-        //     steps {
-        //         echo "📦 Tagging current image for rollback: ${env.ROLLBACK_IMAGE}"
-        //         sh "docker tag ${env.CURRENT_IMAGE_NAME} ${env.ROLLBACK_IMAGE}"
-        //     }
-        // }
+         stage('Backup Current Image') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" && env.CURRENT_IMAGE_NAME != "" }
+            }
+            steps {
+                echo "📦 Tagging current image for rollback: ${env.ROLLBACK_IMAGE}"
+                sh "docker tag ${env.CURRENT_IMAGE_NAME} ${env.ROLLBACK_IMAGE}"
+            }
+        }
 
 
         stage('Build New Docker Image') {
@@ -152,19 +152,19 @@ pipeline {
             }
         }
 
-        // stage('Stop and Remove Old Container') {
-        //     when {
-        //         expression { env.UPGRADE_REQUIRED == "true" && env.CURRENT_CONTAINER_NAME != "" }
-        //     }
+        stage('Stop and Remove Old Container') {
+            when {
+                expression { env.UPGRADE_REQUIRED == "true" && env.CURRENT_CONTAINER_NAME != "" }
+            }
            
-        //     steps {
-        //         echo "🛑 Stopping container ${env.CURRENT_CONTAINER_NAME}"
-        //         sh """
-        //             docker stop ${env.CURRENT_CONTAINER_NAME} || true
-        //             docker rm ${env.CURRENT_CONTAINER_NAME} || true
-        //         """
-        //     }
-        // }
+            steps {
+                echo "🛑 Stopping container ${env.CURRENT_CONTAINER_NAME}"
+                sh """
+                    docker stop ${env.CURRENT_CONTAINER_NAME} || true
+                    docker rm ${env.CURRENT_CONTAINER_NAME} || true
+                """
+            }
+        }
 
         stage('Start New Version with Docker Compose') {
             when {
